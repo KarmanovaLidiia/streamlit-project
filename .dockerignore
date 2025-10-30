@@ -1,0 +1,27 @@
+@'
+# Python / venv / байт-код
+.venv
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# НЕ класть в build context — большие локальные папки и кэши
+hf_cache/
+**/hf_cache/**
+.cache/
+**/.cache/**
+data/
+models/
+models_all/
+reports/
+catboost_info/
+predicted.csv
+
+# VCS/IDE мусор
+.git
+.gitignore
+.idea
+.ipynb_checkpoints
+tests/.pytest_cache
+.pytest_cache
+'@ | Set-Content -Encoding utf8 .dockerignore

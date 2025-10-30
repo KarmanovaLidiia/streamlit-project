@@ -1,0 +1,29 @@
+# IDE, виртуалки, кеши
+.vscode/
+.idea/
+.venv/
+__pycache__/
+*.pyc
+
+# HuggingFace cache, любые кеши/времянки
+hf_cache/
+data/cache/
+data/tmp/
+data/tmp_api/
+data/api_tmp/
+
+# большие промежуточные csv, результаты
+data/processed/
+data/processed_new/
+data/tmp_input.csv
+data/tmp_output.csv
+
+# локальные отчёты и артефакты
+catboost_info/
+graphs/
+reports/
+
+# docker/local
+docker-compose.yml
+*.ps1
+*.sh
