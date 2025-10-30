@@ -1,0 +1,13 @@
+{
+    "container_id": "bbakrgr3qvbcfhtmou08",
+    "image": {
+        "image_url": "cr.yandex/crpb50g0g0pku3mrubdulp/exam-api:latest"
+    },
+    "resources": {
+        "memory": "2147483648",
+        "cores": "2"
+    },
+    "execution_timeout": "60s",
+    "concurrency": "4",
+    "service_account_id": "your-service-account-id"
+}

@@ -1,0 +1,179 @@
+ПОДРОБНОЕ ОПИСАНИЕ ПРИЗНАКОВ
+==================================================
+
+text_length:
+  Тип: int64
+  Не-NULL: 50
+  Среднее: 1676.120
+  Std: 1190.330
+  Min: 328.000
+  Max: 5002.000
+
+word_count:
+  Тип: int64
+  Не-NULL: 50
+  Среднее: 265.600
+  Std: 196.751
+  Min: 46.000
+  Max: 820.000
+
+sentence_count:
+  Тип: int64
+  Не-NULL: 50
+  Среднее: 47.720
+  Std: 39.596
+  Min: 1.000
+  Max: 157.000
+
+avg_word_length:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 5.156
+  Std: 0.386
+  Min: 4.443
+  Max: 6.397
+
+lexical_diversity:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.618
+  Std: 0.087
+  Min: 0.431
+  Max: 0.744
+
+has_questions:
+  Тип: int64
+  Не-NULL: 50
+  Среднее: 0.920
+  Std: 0.274
+  Min: 0.000
+  Max: 1.000
+
+has_exclamations:
+  Тип: int64
+  Не-NULL: 50
+  Среднее: 0.000
+  Std: 0.000
+  Min: 0.000
+  Max: 0.000
+
+keyword_overlap:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.768
+  Std: 0.078
+  Min: 0.593
+  Max: 0.902
+
+response_relevance:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 1.000
+  Std: 0.000
+  Min: 1.000
+  Max: 1.000
+
+grammar_quality:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.682
+  Std: 0.146
+  Min: 0.419
+  Max: 0.868
+
+has_punctuation:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.940
+  Std: 0.240
+  Min: 0.000
+  Max: 1.000
+
+sentence_completeness:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.724
+  Std: 0.157
+  Min: 0.297
+  Max: 1.000
+
+has_greeting:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.540
+  Std: 0.503
+  Min: 0.000
+  Max: 1.000
+
+has_description:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.540
+  Std: 0.503
+  Min: 0.000
+  Max: 1.000
+
+has_connectors:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.500
+  Std: 0.505
+  Min: 0.000
+  Max: 1.000
+
+has_emotional_words:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.360
+  Std: 0.485
+  Min: 0.000
+  Max: 1.000
+
+style_score:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.467
+  Std: 0.213
+  Min: 0.000
+  Max: 1.000
+
+answer_length_sufficiency:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 1.000
+  Std: 0.000
+  Min: 1.000
+  Max: 1.000
+
+content_richness:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.861
+  Std: 0.038
+  Min: 0.745
+  Max: 0.929
+
+engagement_level:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.892
+  Std: 0.090
+  Min: 0.576
+  Max: 0.958
+
+question_type:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 2.460
+  Std: 1.129
+  Min: 1.000
+  Max: 4.000
+
+composite_quality_score:
+  Тип: float64
+  Не-NULL: 50
+  Среднее: 0.788
+  Std: 0.054
+  Min: 0.659
+  Max: 0.894
+

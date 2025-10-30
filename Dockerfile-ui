@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Копируем requirements
+COPY ui/requirements.txt .
+
+# Устанавливаем зависимости
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем код приложения
+COPY ui/app.py .
+
+# Создаем папку для шаблонов (если нужна)
+RUN mkdir -p templates
+
+# Копируем шаблоны (если есть)
+COPY ui/templates/ ./templates/
+
+EXPOSE 8080
+
+# Запускаем приложение
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
