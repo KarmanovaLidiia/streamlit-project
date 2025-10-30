@@ -1,6 +1,8 @@
 import os
 import json
 import time
+import zipfile
+import tempfile
 import threading
 from pathlib import Path
 
@@ -18,7 +20,13 @@ st.set_page_config(
 st.title("Автоматическая оценка ответа иностранного гражданина")
 st.caption("Загрузите CSV как в задании. На выходе получите файл с колонкой `pred_score`.")
 
-# Опции ускорения (не влияет на качество полной обработки)
+# Небольшое предупреждение про крупные файлы
+st.info(
+    "⚠️ Загрузка больших файлов (>10 МБ) может занять 1–3 минуты из-за сети. "
+    "После выбора файла дождитесь появления сообщения об успешной загрузке."
+)
+
+# Опции ускорения (не влияет на качество полноценной обработки)
 with st.expander("⚙️ Параметры запуска", expanded=True):
     fast_mode = st.checkbox(
         "Быстрый прогон (для проверки)", value=True,
@@ -33,7 +41,16 @@ with st.expander("⚙️ Параметры запуска", expanded=True):
         "он просто делает сэмпл первых N строк."
     )
 
-uploaded = st.file_uploader("Загрузите CSV", type=["csv"])
+# Обёртка вокруг uploader, чтобы показать короткий спиннер и инфо после выбора файла
+placeholder = st.empty()
+uploaded = placeholder.file_uploader("Загрузите CSV (или ZIP с CSV внутри)", type=["csv", "zip"])
+if uploaded is not None:
+    with st.spinner("📦 Файл загружается..."):
+        time.sleep(1.0)  # небольшая задержка, чтобы UX не выглядел как «подвис»
+    size_mb = getattr(uploaded, "size", 0) / 1e6 if hasattr(uploaded, "size") else 0
+    st.success(f"✅ Файл `{uploaded.name}` загружен ({size_mb:.1f} МБ).")
+    placeholder.empty()
+
 run = st.button("Оценить", type="primary", disabled=uploaded is None)
 
 # --------------------------- RUNTIME PATHS ---------------------------
@@ -45,7 +62,7 @@ TMP_DIR_OUT.mkdir(parents=True, exist_ok=True)
 TMP_IN = TMP_DIR_IN / "tmp_input.csv"
 TMP_OUT = TMP_DIR_OUT / "tmp_output.csv"
 
-# Файл прогресса, его будет писать src/predict.py
+# Файл прогресса, его пишет src/predict.py
 PROGRESS_FILE = Path("/tmp/progress.json")
 os.environ["PROGRESS_FILE"] = str(PROGRESS_FILE)
 
@@ -54,7 +71,7 @@ STAGE_WEIGHTS = {
     "загрузка CSV": 2,
     "очистка": 6,
     "базовые фичи": 6,
-    "семантика": 55,        # самый тяжелый шаг
+    "семантика": 55,
     "q4-фичи": 10,
     "on-topic": 2,
     "инференс CatBoost": 15,
@@ -80,7 +97,6 @@ def _write_csv(df: pd.DataFrame, path: Path):
 
 def _calc_total_progress(cur_stage: str, current: int, total: int) -> float:
     """Переводим локальный прогресс стадии в общий % с учетом весов."""
-    # сумма весов предыдущих стадий
     stages = list(STAGE_WEIGHTS.keys())
     done_weight = 0.0
     for s in stages:
@@ -103,6 +119,23 @@ def _read_progress():
         pass
     return {"stage": "подготовка", "current": 0, "total": 1, "note": ""}
 
+def _extract_zip_if_needed(uploaded_file) -> Path | None:
+    """
+    Если загрузили ZIP, извлекаем первый CSV внутрь временной папки
+    и возвращаем путь к нему. Иначе — None.
+    """
+    if uploaded_file.name.lower().endswith(".zip"):
+        tmpdir = tempfile.TemporaryDirectory()
+        zpath = Path(tmpdir.name)
+        with zipfile.ZipFile(uploaded_file) as zf:
+            zf.extractall(zpath)
+            for name in zf.namelist():
+                if name.lower().endswith(".csv"):
+                    return zpath / name
+        st.error("В ZIP не найден CSV-файл.")
+        st.stop()
+    return None
+
 # --------------------------- MAIN ---------------------------
 if uploaded and run:
     start_time = time.time()
@@ -114,12 +147,20 @@ if uploaded and run:
         pass
 
     with st.status("⏳ Подготовка к запуску...", expanded=True) as status:
-        st.write("Сохраняю загруженный файл…")
-        raw_bytes = uploaded.read()
-        _save_bytes_to(TMP_IN, raw_bytes)
+        st.write("Сохраняю и подготавливаю файл…")
 
-        # Быстрый прогон — перезапишем TMP_IN первыми N строками
-        if fast_mode:
+        # Если это ZIP — извлечём CSV, иначе — сохраняем байты
+        extracted_csv = _extract_zip_if_needed(uploaded)
+        if extracted_csv is not None:
+            # Уже готовый CSV из ZIP
+            TMP_IN = extracted_csv
+            st.info(f"📦 ZIP распакован, найден `{extracted_csv.name}`.")
+        else:
+            raw_bytes = uploaded.read()
+            _save_bytes_to(TMP_IN, raw_bytes)
+
+        # Быстрый прогон — перезапишем TMP_IN первыми N строками (только если это не CSV из zip)
+        if fast_mode and extracted_csv is None:
             st.write(f"Читаю первые {row_limit} строк для быстрого прогона…")
             try:
                 df_head = _read_any_csv(TMP_IN, nrows=int(row_limit))
@@ -149,7 +190,6 @@ if uploaded and run:
         try:
             pipeline_infer(TMP_IN, TMP_OUT)
         except Exception as e:
-            # складываем текст исключения в файл прогресса, чтобы основной поток отобразил
             with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
                 json.dump({"stage": "error", "current": 0, "total": 1, "note": str(e)}, f)
 
@@ -173,7 +213,7 @@ if uploaded and run:
         stage_text.write(f"Текущая стадия: **{stage}** &nbsp;&nbsp; {cur}/{tot} {note}")
         time.sleep(0.8)
 
-    # финальный апдейт (на случай, если поток завершился между итерациями)
+    # финальный апдейт
     info = _read_progress()
     if info.get("stage") == "error":
         err_box.error(f"Во время инференса произошла ошибка: {info.get('note')}")
