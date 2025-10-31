@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from catboost import CatBoostRegressor
-from huggingface_hub import hf_hub_download  # fallback-скачивание моделей
+from huggingface_hub import hf_hub_download
 
 from src.data_cleaning import prepare_dataframe
 from src.features import build_baseline_features
@@ -24,20 +24,16 @@ from src.explanations import add_score_explanations
 ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = ROOT / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Репозиторий Space, откуда подкачиваем модели при отсутствии локально
 SPACE_REPO_ID = os.getenv("SPACE_REPO_ID", "lidiiakarmanova/exam-evaluator")
 
-# ----------------------- CONFIG (env) -----------------------
+# ----------------------- CONFIG -----------------------
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
-FAST_ROW_LIMIT = os.getenv("FAST_ROW_LIMIT")  # e.g. "2000"
+FAST_ROW_LIMIT = os.getenv("FAST_ROW_LIMIT")
 DISABLE_EXPLANATIONS = os.getenv("DISABLE_EXPLANATIONS", "0") == "1"
-
-# Файл, куда пишем прогресс (читает app.py)
 PROGRESS_FILE = Path(os.getenv("PROGRESS_FILE", "/tmp/progress.json"))
 
+# ----------------------- PROGRESS -----------------------
 def _progress_write(stage: str, current: int, total: int, note: str = "") -> None:
-    """Безопасно пишет прогресс в JSON, UI будет его читать."""
     try:
         PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
@@ -47,8 +43,8 @@ def _progress_write(stage: str, current: int, total: int, note: str = "") -> Non
                 ensure_ascii=False,
             )
     except Exception:
-        # не падаем из-за проблем с прогрессом
         pass
+
 
 # ----------------------- IO helpers ------------------------
 def _read_csv_safely(path: Path) -> pd.DataFrame:
@@ -75,6 +71,7 @@ def _read_csv_safely(path: Path) -> pd.DataFrame:
             last_err = e
     raise last_err
 
+
 def _clip_by_q(qnum: int, preds: np.ndarray) -> np.ndarray:
     if qnum in (1, 3):
         lo, hi = 0.0, 1.0
@@ -84,14 +81,12 @@ def _clip_by_q(qnum: int, preds: np.ndarray) -> np.ndarray:
         lo, hi = 0.0, 2.0
     return np.clip(preds, lo, hi)
 
+
 # ----------------------- Model cache ------------------------
 _MODEL_CACHE: dict[int, CatBoostRegressor] = {}
 
+
 def _load_model(qnum: int) -> CatBoostRegressor:
-    """
-    Пытаемся загрузить модель Q{qnum} из локальной папки models/.
-    Если файла нет (часто так бывает в контейнере), скачиваем из Space.
-    """
     if qnum in _MODEL_CACHE:
         return _MODEL_CACHE[qnum]
 
@@ -100,7 +95,7 @@ def _load_model(qnum: int) -> CatBoostRegressor:
         print(f"[models] {local_path} не найден. Скачиваю из Space…")
         downloaded = hf_hub_download(
             repo_id=SPACE_REPO_ID,
-            repo_type="space",                 # ВАЖНО: это Space-репозиторий
+            repo_type="space",
             filename=f"models/catboost_Q{qnum}.cbm",
         )
         local_path = Path(downloaded)
@@ -109,6 +104,7 @@ def _load_model(qnum: int) -> CatBoostRegressor:
     model.load_model(str(local_path))
     _MODEL_CACHE[qnum] = model
     return model
+
 
 def _align_to_model_features(model: CatBoostRegressor, X: pd.DataFrame) -> pd.DataFrame:
     names = list(model.feature_names_)
@@ -119,11 +115,29 @@ def _align_to_model_features(model: CatBoostRegressor, X: pd.DataFrame) -> pd.Da
         return Z[names].astype("float32")
     return X.reindex(sorted(X.columns), axis=1).astype("float32")
 
+
+# ----------------------- Feature alias adapter -----------------------
+def _add_feature_aliases(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Создаёт алиасы фичей с/без префикса 'q4_',
+    чтобы избежать KeyError при несовпадении имён в модели и фичах.
+    """
+    out = df.copy()
+    cols = list(df.columns)
+    for col in cols:
+        if col.startswith("q4_"):
+            alias = col.replace("q4_", "", 1)
+            if alias not in out.columns:
+                out[alias] = out[col]
+        else:
+            prefixed = f"q4_{col}"
+            if prefixed not in out.columns:
+                out[prefixed] = out[col]
+    return out
+
+
+# ----------------------- Optional on-topic -----------------------
 def _maybe_add_on_topic(df_feats: pd.DataFrame) -> pd.DataFrame:
-    """
-    Добавляем вероятность «по теме» (если есть классификатор on_topic.pkl).
-    При отсутствии — пытаемся скачать из Space, иначе ставим 0.0.
-    """
     out = df_feats.copy()
     path = MODELS_DIR / "on_topic.pkl"
     if not path.exists():
@@ -150,18 +164,9 @@ def _maybe_add_on_topic(df_feats: pd.DataFrame) -> pd.DataFrame:
     out["on_topic_prob"] = clf.predict_proba(X_on)[:, 1].astype("float32")
     return out
 
+
 # ----------------------- Chunked apply ----------------------
-def _apply_in_chunks(
-    df: pd.DataFrame,
-    fn,
-    chunk_size: int,
-    *,
-    stage_name: str | None = None,
-) -> pd.DataFrame:
-    """
-    Разбивает df на куски по chunk_size, применяет fn к каждому куску, конкатенирует результат.
-    fn: (pd.DataFrame) -> pd.DataFrame  (должен сохранять порядок и индексы)
-    """
+def _apply_in_chunks(df: pd.DataFrame, fn, chunk_size: int, *, stage_name: str | None = None) -> pd.DataFrame:
     if len(df) == 0:
         if stage_name:
             _progress_write(stage_name, 1, 1, "empty")
@@ -176,15 +181,15 @@ def _apply_in_chunks(
     total = len(df)
     n_chunks = math.ceil(total / chunk_size)
     for i in range(n_chunks):
-        lo = i * chunk_size
-        hi = min((i + 1) * chunk_size, total)
+        lo, hi = i * chunk_size, min((i + 1) * chunk_size, total)
         chunk = df.iloc[lo:hi].copy()
         out_chunk = fn(chunk)
         parts.append(out_chunk)
         if stage_name:
             _progress_write(stage_name, i + 1, n_chunks, f"строки [{lo}:{hi})")
     res = pd.concat(parts, axis=0)
-    return res.loc[df.index]  # вернуть исходный порядок
+    return res.loc[df.index]
+
 
 # ----------------------- Main pipeline ----------------------
 def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
@@ -192,7 +197,7 @@ def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
     df_raw = _read_csv_safely(input_csv)
     print(f"CSV прочитан: {len(df_raw):,} строк")
 
-    # Быстрый режим (по env), если задан
+    # Быстрый режим
     if FAST_ROW_LIMIT:
         try:
             n = int(FAST_ROW_LIMIT)
@@ -202,53 +207,32 @@ def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
         except Exception:
             pass
 
-    # 1) Cleaning
+    # 1) Очистка
     _progress_write("очистка", 0, 1)
-    try:
-        df_clean = prepare_dataframe(df_raw)
-        print("DataFrame подготовлен")
-    except Exception as e:
-        print(f"Ошибка в prepare_dataframe: {e}")
-        raise
+    df_clean = prepare_dataframe(df_raw)
     _progress_write("очистка", 1, 1, "ok")
 
-    # 2) Baseline features
+    # 2) Базовые фичи
     _progress_write("базовые фичи", 0, 1)
-    try:
-        feats = build_baseline_features(df_clean)
-        print("Базовые фичи построены")
-    except Exception as e:
-        print(f"Ошибка в build_baseline_features: {e}")
-        raise
+    feats = build_baseline_features(df_clean)
     _progress_write("базовые фичи", 1, 1, "ok")
 
-    # 3) Semantic similarity (самый тяжёлый шаг) — батчами
-    print("Вычисляем семантическую близость (ruSBERT) батчами…")
-    feats = _apply_in_chunks(
-        feats,
-        fn=add_semantic_similarity,
-        chunk_size=CHUNK_SIZE,
-        stage_name="семантика",
-    )
-    print("Семантические фичи добавлены")
+    # 3) Семантика
+    feats = _apply_in_chunks(feats, fn=add_semantic_similarity, chunk_size=CHUNK_SIZE, stage_name="семантика")
 
-    # 4) Q4 features — тоже батчами
-    feats = _apply_in_chunks(
-        feats,
-        fn=add_q4_features,
-        chunk_size=CHUNK_SIZE,
-        stage_name="q4-фичи",
-    )
-    print("Q4 фичи добавлены")
+    # 4) Q4-фичи
+    feats = _apply_in_chunks(feats, fn=add_q4_features, chunk_size=CHUNK_SIZE, stage_name="q4-фичи")
 
-    # 5) Optional on-topic
+    # 5) Алиасы фичей (важно!)
+    feats = _add_feature_aliases(feats)
+
+    # 6) On-topic
     _progress_write("on-topic", 0, 1)
     feats = _maybe_add_on_topic(feats)
     _progress_write("on-topic", 1, 1, "ok")
 
-    # 6) Inference per question
-    total_q = 4
-    done_q = 0
+    # 7) CatBoost
+    total_q, done_q = 4, 0
     preds = np.zeros(len(feats), dtype=float)
     for q in (1, 2, 3, 4):
         _progress_write("инференс CatBoost", done_q, total_q, f"Q{q}")
@@ -257,7 +241,7 @@ def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
             fcols = [
                 c for c in feats.columns
                 if c not in ("question_number", "question_text", "answer_text", "score")
-                   and pd.api.types.is_numeric_dtype(feats[c])
+                and pd.api.types.is_numeric_dtype(feats[c])
             ]
             Xq = feats.loc[mask, fcols]
             model = _load_model(q)
@@ -267,23 +251,21 @@ def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
         done_q += 1
         _progress_write("инференс CatBoost", done_q, total_q, f"Q{q} ✓")
 
-    # 7) Explanations (можно отключить env-переменной)
+    # 8) Объяснения
     if not DISABLE_EXPLANATIONS:
         _progress_write("объяснения", 0, 1)
         try:
             feats_with_explanations = add_score_explanations(feats, preds)
-            print("Объяснения оценок добавлены")
         except Exception as e:
             print(f"Не удалось добавить объяснения: {e}")
             feats_with_explanations = feats.copy()
             feats_with_explanations["score_explanation"] = "Объяснение недоступно"
         _progress_write("объяснения", 1, 1, "ok")
     else:
-        print("[FAST] DISABLE_EXPLANATIONS=1 → пропускаем объяснения")
         feats_with_explanations = feats.copy()
         feats_with_explanations["score_explanation"] = "Пропущено (быстрый режим)"
 
-    # 8) Output
+    # 9) Вывод
     _progress_write("сохранение", 0, 1)
     out = df_raw.copy()
     if "Оценка экзаменатора" not in out.columns:
@@ -298,21 +280,21 @@ def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
     _progress_write("готово", 1, 1)
     print(f"Готово: {output_csv}")
 
+
 # ----------------------- Helper API ----------------------
 def predict_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     tmp_dir = Path(tempfile.mkdtemp(prefix="predict_df_"))
-    tmp_in = tmp_dir / "input.csv"
-    tmp_out = tmp_dir / "output.csv"
+    tmp_in, tmp_out = tmp_dir / "input.csv", tmp_dir / "output.csv"
     df.to_csv(tmp_in, index=False, encoding="utf-8-sig", sep=";")
     pipeline_infer(tmp_in, tmp_out)
-    df_pred = pd.read_csv(tmp_out, encoding="utf-8-sig", sep=";")
-    return df_pred
+    return pd.read_csv(tmp_out, encoding="utf-8-sig", sep=";")
+
 
 # ----------------------- CLI ----------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True, help="Путь к исходному CSV")
-    parser.add_argument("--output", type=str, required=True, help="Куда сохранить CSV с предсказаниями")
+    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args()
     try:
         pipeline_infer(Path(args.input), Path(args.output))
