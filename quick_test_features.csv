@@ -1,5 +1,3 @@
-original_index,text_length,word_count,sentence_count,avg_sentence_length,avg_word_length,lexical_diversity,has_questions,has_exclamations,has_ellipsis,uppercase_ratio,long_word_ratio,text_complexity,semantic_similarity,keyword_overlap,tfidf_similarity,response_relevance,grammar_error_count,grammar_error_ratio,has_punctuation,sentence_completeness,proper_capitalization,has_greeting,has_description,has_connectors,has_emotional_words,coherence_score,answer_length_sufficiency,content_density,dialog_initiation,social_appropriateness,question_type,composite_quality_score,response_adequacy,interaction_quality,descriptive_detail,spatial_awareness
-0,89,14,2,7.0,5.285714285714286,1.0,0.0,0,0,0.056179775280898875,0.42857142857142855,0.42857142857142855,0.0,0.0,0.0,1.0,0,0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.65,0.14606741573033707,0.8666666666666667,0.2,1.0,0.9,,,,
-1,67,13,2,6.5,4.076923076923077,0.9230769230769231,0.0,0,0,0.029850746268656716,0.07692307692307693,0.07100591715976332,0.0,0.14285714285714285,0.0,0.8571428571428571,0,0,1.0,1.0,1.0,0.0,0.0,0.0,1.0,0.2,0.65,0.19402985074626866,,,2.0,0.9643076923076924,0.52,0.5,,
-2,75,13,2,6.5,4.615384615384615,1.0,0.0,0,0,0.02666666666666667,0.15384615384615385,0.15384615384615385,0.0,0.0,0.0,1.0,0,0,1.0,1.0,1.0,0.0,1.0,0.0,0.0,0.2,0.65,0.17333333333333334,,,4.0,0.92,,,0.43333333333333335,1.0
-3,19,3,1,3.0,5.333333333333333,1.0,0.0,0,0,0.10526315789473684,0.3333333333333333,0.3333333333333333,0.20199309249791833,0.3333333333333333,0.20199309249791833,0.5,0,0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.15,0.15789473684210525,0.2,0.2,1.0,0.9807972369991674,,,,
+version https://git-lfs.github.com/spec/v1
+oid sha256:ceddd00b1810d4b584b1fe3408e210ccb6476655b02fb7fe6184636c75fe4c9e
+size 1606
