@@ -27,4 +27,3 @@ reports/
 docker-compose.yml
 *.ps1
 *.sh
-small.csv
