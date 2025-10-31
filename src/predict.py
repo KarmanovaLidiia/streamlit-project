@@ -52,7 +52,9 @@ def _clip_by_q(qnum: int, preds: np.ndarray) -> np.ndarray:
     return np.clip(preds, lo, hi)
 
 def _load_model(qnum: int) -> CatBoostRegressor:
+    model_path = MODELS_DIR / f"model_q{qnum}.cbm"
     model = CatBoostRegressor()
+    model.load_model(str(model_path))
     return model
 
 def _align_to_model_features(model: CatBoostRegressor, X: pd.DataFrame) -> pd.DataFrame:
@@ -61,13 +63,15 @@ def _align_to_model_features(model: CatBoostRegressor, X: pd.DataFrame) -> pd.Da
         Z = pd.DataFrame(index=X.index, dtype=float)
         for col in names:
             Z[col] = X[col] if col in X.columns else 0.0
+        return Z
+    return X
 
 def _maybe_add_on_topic(df_feats: pd.DataFrame) -> pd.DataFrame:
     out = df_feats.copy()
     path = MODELS_DIR / "on_topic.pkl"
     if not path.exists():
-            out["on_topic_prob"] = 0.0
-            return out
+        out["on_topic_prob"] = 0.0
+        return out
     pack = joblib.load(path)
     clf = pack["model"]
     need_feats = pack["features"]
@@ -80,36 +84,30 @@ def _maybe_add_on_topic(df_feats: pd.DataFrame) -> pd.DataFrame:
 
 def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
     df_raw = _read_csv_safely(input_csv)
-
-        try:
     df_clean = prepare_dataframe(df_raw)
-
     feats = build_baseline_features(df_clean)
-
-
-
     feats = _maybe_add_on_topic(feats)
 
     preds = np.zeros(len(feats), dtype=float)
     for q in (1, 2, 3, 4):
         mask = feats["question_number"] == q
-            fcols = [
-                c for c in feats.columns
-                if c not in ("question_number", "question_text", "answer_text", "score")
-                and pd.api.types.is_numeric_dtype(feats[c])
-            ]
-            Xq = feats.loc[mask, fcols]
-            model = _load_model(q)
-            Xq = _align_to_model_features(model, Xq)
-            pq = model.predict(Xq)
-            preds[mask.values] = _clip_by_q(q, pq)
+        fcols = [
+            c for c in feats.columns
+            if c not in ("question_number", "question_text", "answer_text", "score")
+            and pd.api.types.is_numeric_dtype(feats[c])
+        ]
+        Xq = feats.loc[mask, fcols]
+        model = _load_model(q)
+        Xq = _align_to_model_features(model, Xq)
+        pq = model.predict(Xq)
+        preds[mask.values] = _clip_by_q(q, pq)
 
-        try:
-            feats_with_explanations = add_score_explanations(feats, preds)
-        except Exception as e:
-            print(f"Не удалось добавить объяснения: {e}")
-            feats_with_explanations = feats.copy()
-            feats_with_explanations["score_explanation"] = "Объяснение недоступно"
+    try:
+        feats_with_explanations = add_score_explanations(feats, preds)
+    except Exception as e:
+        print(f"Не удалось добавить объяснения: {e}")
+        feats_with_explanations = feats.copy()
+        feats_with_explanations["score_explanation"] = "Объяснение недоступно"
 
     out = df_raw.copy()
     if "Оценка экзаменатора" not in out.columns:
@@ -125,14 +123,10 @@ def pipeline_infer(input_csv: Path, output_csv: Path) -> None:
 
 def predict_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     tmp_dir = Path(tempfile.mkdtemp(prefix="predict_df_"))
+    tmp_in = tmp_dir / "input.csv"
+    tmp_out = tmp_dir / "output.csv"
     df.to_csv(tmp_in, index=False, encoding="utf-8-sig", sep=";")
     pipeline_infer(tmp_in, tmp_out)
+    return pd.read_csv(tmp_out, encoding="utf-8-sig", sep=";")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    args = parser.parse_args()
-    try:
-        pipeline_infer(Path(args.input), Path(args.output))
-    except Exception as e:
-        print(f"Ошибка: {e}", file=sys.stderr)
-        raise
+__all__ = ["pipeline_infer", "predict_dataframe"]

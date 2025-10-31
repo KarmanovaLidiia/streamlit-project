@@ -36,7 +36,7 @@ def build_baseline_features(df: pd.DataFrame) -> pd.DataFrame:
 
     Возвращает df с базовыми признаками:
       ans_len_chars, ans_len_words, ans_n_sents, ans_avg_sent_len,
-      ans_ttr, ans_short_sent_rt, ans_punct_rt, q_len_words
+      ans_ttr, ans_short_sent_rt, ans_punct_rt, q_len_words, has_intro
     """
 
     out = df.copy()
@@ -91,12 +91,17 @@ def build_baseline_features(df: pd.DataFrame) -> pd.DataFrame:
     # длина вопроса в словах
     out["q_len_words"] = q_words.apply(len).astype(int)
 
-    # порядок колонок (не обязателен, но удобно)
+    # наличие вводной части — простая эвристика
+    out["has_intro"] = out["answer_text"].str.contains(
+        r"\b(во-первых|например|сначала|итак|сперва|прежде всего)\b",
+        case=False, na=False
+    ).astype(float)
+
+    # порядок колонок
     cols = [
         "question_number", "question_text", "answer_text", "score",
         "ans_len_chars", "ans_len_words", "ans_n_sents", "ans_avg_sent_len",
-        "ans_ttr", "ans_short_sent_rt", "ans_punct_rt", "q_len_words",
+        "ans_ttr", "ans_short_sent_rt", "ans_punct_rt", "q_len_words", "has_intro",
     ]
-    # на случай, если где-то нет нужных — фильтруем по существующим
     cols = [c for c in cols if c in out.columns]
     return out[cols]
